@@ -9,7 +9,6 @@ def execute(plan):
 
         try:
             if cmd == "OPEN_CHROME":
-                # Handle platform differences
                 if os.name == 'nt':
                     os.system("start chrome")
                 else:
@@ -19,30 +18,32 @@ def execute(plan):
                 webbrowser.open(f"https://www.google.com/search?q={arg}")
 
             elif cmd == "TYPE":
-                pyautogui.write(arg)
+                pyautogui.write(arg, interval=0.02) # slightly slower to ensure OS catches it
 
             elif cmd == "PRESS":
                 pyautogui.press(arg)
+
+            elif cmd == "HOTKEY":
+                # arg format: "ctrl,c" or "win,d" or "alt,tab"
+                keys = [k.strip() for k in arg.split(",")]
+                pyautogui.hotkey(*keys)
 
             elif cmd == "WAIT":
                 time.sleep(float(arg))
 
             elif cmd == "RUN_CMD":
-                # Execute a terminal command
                 subprocess.Popen(arg, shell=True)
 
             elif cmd == "MOUSE_MOVE":
-                # arg format: "x,y"
                 coords = arg.split(",")
                 if len(coords) == 2:
                     x, y = int(coords[0]), int(coords[1])
-                    pyautogui.moveTo(x, y, duration=0.5)
+                    pyautogui.moveTo(x, y, duration=0.3)
 
             elif cmd == "MOUSE_CLICK":
                 pyautogui.click()
 
             elif cmd == "OPEN_APP":
-                # Open general application
                 if os.name == 'nt':
                     os.system(f"start {arg}")
                 else:

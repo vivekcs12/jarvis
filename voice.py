@@ -1,63 +1,46 @@
+import speech_recognition as sr
 from faster_whisper import WhisperModel
-import sounddevice as sd
 import numpy as np
-import time
+import io
+import wave
 
+# Load the local tiny model
 model = WhisperModel("tiny")
 
-def listen(threshold=0.01, silence_duration=1.5, fs=16000):
-    try:
+# Initialize the recognizer
+recognizer = sr.Recognizer()
+# Adjust for background noise automatically
+recognizer.dynamic_energy_threshold = True
+
+def listen():
+    with sr.Microphone(sample_rate=16000) as source:
+        print("\nAdjusting for background noise... Please wait.")
+        recognizer.adjust_for_ambient_noise(source, duration=1)
         print("Listening...")
 
-        audio_data = []
-        silence_start = None
+        try:
+            # Listen for user input. It will stop automatically when you stop speaking.
+            # Timeout is how long it waits for you to START speaking.
+            # phrase_time_limit is the maximum length of a single phrase.
+            audio_data = recognizer.listen(source, timeout=10, phrase_time_limit=30)
 
-        # Generator for audio blocks
-        def callback(indata, frames, time, status):
-            if status:
-                print(status)
-            audio_data.extend(indata.flatten())
+            print("Processing audio...")
 
-        stream = sd.InputStream(samplerate=fs, channels=1, dtype='float32', callback=callback)
-        with stream:
-            while True:
-                time.sleep(0.1)
+            # Convert SpeechRecognition AudioData to numpy array for Whisper
+            raw_data = audio_data.get_raw_data(convert_rate=16000, convert_width=2)
+            # The data is 16-bit PCM. Convert it to float32 between -1.0 and 1.0
+            audio_np = np.frombuffer(raw_data, dtype=np.int16).astype(np.float32) / 32768.0
 
-                # Wait until we have some audio
-                if not audio_data:
-                    continue
+            segments, _ = model.transcribe(audio_np)
+            text = "".join([seg.text for seg in segments])
+            return text.lower().strip()
 
-                # Check if the last ~0.1 seconds of audio is mostly silent
-                recent_samples = audio_data[-int(0.1 * fs):]
-                if len(recent_samples) > 0:
-                    volume = np.max(np.abs(recent_samples))
-
-                    if volume < threshold:
-                        if silence_start is None:
-                            silence_start = time.time()
-                        elif time.time() - silence_start > silence_duration:
-                            # If we have enough data (at least 0.5s), stop listening
-                            if len(audio_data) > fs * 0.5:
-                                break
-                            else:
-                                # Too short, reset and keep listening
-                                audio_data.clear()
-                                silence_start = None
-                    else:
-                        silence_start = None
-
-        print("Processing audio...")
-        audio = np.array(audio_data, dtype='float32')
-        # Normalize
-        if len(audio) > 0 and max(abs(audio)) > 0:
-            audio = audio / max(abs(audio))
-
-        segments, _ = model.transcribe(audio)
-        text = "".join([seg.text for seg in segments])
-        return text.lower().strip()
-    except Exception as e:
-        print(f"Error in listen: {e}")
-        return ""
+        except sr.WaitTimeoutError:
+            print("Listening timed out. No speech detected.")
+            return ""
+        except Exception as e:
+            print(f"Error in listen: {e}")
+            return ""
 
 if __name__ == "__main__":
     print(listen())
