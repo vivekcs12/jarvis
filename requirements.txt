@@ -1,0 +1,6 @@
+requests
+pyautogui
+faster-whisper
+sounddevice
+numpy
+pyttsx3
